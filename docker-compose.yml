@@ -1,20 +1,15 @@
-version: "3"
+version: "3.9"
 services:
-  human:
-    image: human-docker
-    ports:
-      - "8080:8080"
-    networks:
-      - peopleToDoList
-    depends_on:
-      - todolist
-
-  todolist:
+   todolist:
     image: docker-spring-boot
     ports:
-      - "5000:5000"
-    networks:
-      - peopleToDoList
+    - 5000:5000
 
-networks:
-  peopleToDoList:
+   human:
+     image: human-docker
+     depends_on:
+       - todolist
+     ports:
+       - 8080:8080
+
+

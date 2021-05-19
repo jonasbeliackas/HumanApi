@@ -6,15 +6,21 @@ import com.example.demo.modem.ToDoItem;
 import com.example.demo.repo.HumanRepo;
 import com.example.demo.repo.ToDOItemRepo;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping(value = "/People")
@@ -25,12 +31,68 @@ public class HumanController {
     @Autowired
     ToDOItemRepo toDOItemRepo;
 
+
+    @PostMapping("/hole")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ResponseEntity<Human> humanWithToDoListsave(@RequestBody Human human) throws UnknownHostException {
+
+
+        HttpHeaders responseHeaders = new HttpHeaders();
+        responseHeaders.set("Location",
+                "/People/hole");
+
+        String url = "http://todolist:5000/todo";
+
+        Set<ToDoItem> toDoItems = human.getToDoItems();
+
+        RestTemplate restTemplate = new RestTemplate();
+        HttpEntity<ToDoItem> httpEntity;
+        ToDoItem responseItem;
+        Human savedHuman = new Human();
+        savedHuman.setName(human.getName());
+        for(ToDoItem toDoItem : toDoItems)
+        {
+            httpEntity = new HttpEntity<>(toDoItem, responseHeaders);
+
+            responseItem = restTemplate.postForObject(url, httpEntity, ToDoItem.class);
+
+            savedHuman.addToDoItem(responseItem);
+            humanRepo.save(savedHuman);
+            responseItem.setHumanByID(savedHuman);
+            toDOItemRepo.save(responseItem);
+
+        }
+
+        return  ResponseEntity.status(HttpStatus.OK)
+                .headers(responseHeaders)
+                .body(savedHuman);
+    }
+
     @GetMapping
     public ResponseEntity<List<Human>> findAll() throws IOException {
         HttpHeaders responseHeaders = new HttpHeaders();
         responseHeaders.set("Location",
                 "/People/");
+        String url = "http://todolist:5000/todo";
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<ToDoItem>>() {
+                    });
 
+        }catch(HttpStatusCodeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).headers(responseHeaders).body(humanRepo.findAll());
+        }
+        catch (ResourceAccessException e)
+        {
+            toDOItemRepo.deleteAll();
+            for(Human human : humanRepo.findAll() )
+                human.getToDoItems().clear();
+            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT).headers(responseHeaders).body(humanRepo.findAll());
+        }
         if(humanRepo.findAll().isEmpty())
             return ResponseEntity.status(HttpStatus.NOT_FOUND).headers(responseHeaders).body(humanRepo.findAll());
 
